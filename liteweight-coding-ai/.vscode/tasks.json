@@ -1,0 +1,37 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "webview: build",
+			"type": "npm",
+			"script": "build:webview",
+			"problemMatcher": [],
+			"presentation": {
+				"reveal": "never"
+			}
+		},
+		{
+			"label": "tsc: watch",
+			"type": "npm",
+			"script": "watch",
+			"problemMatcher": "$tsc-watch",
+			"isBackground": true,
+			"presentation": {
+				"reveal": "never"
+			}
+		},
+		{
+			"label": "build:all",
+			"dependsOn": [
+				"tsc: watch",
+				"webview: build"
+			],
+			"dependsOrder": "parallel",
+			"problemMatcher": [],
+			"group": {
+				"kind": "build",
+				"isDefault": true
+			}
+		}
+	]
+}

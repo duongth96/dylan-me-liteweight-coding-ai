@@ -1,0 +1,15 @@
+services:
+  olama:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "11434:11434"
+      - "7681:7681"
+    volumes:
+      - ./models:/root/.ollama
+    environment:
+      - CRE_USER=admin
+      - CRE_PASSWORD=admin
+      - WEBTTY_USER=ollama
+      - WEBTTY_PASSWORD=1324

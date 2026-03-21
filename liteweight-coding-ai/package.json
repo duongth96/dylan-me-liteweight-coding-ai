@@ -1,0 +1,76 @@
+{
+  "name": "liteweight-coding-ai",
+  "displayName": "liteweight-coding-ai",
+  "description": "A lightweight coding AI extension for VS Code",
+  "version": "0.0.1",
+  "engines": {
+    "vscode": "^1.80.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onView:liteweight-coding-ai-sidebar",
+    "onCommand:liteweight-coding-ai.helloWorld"
+  ],
+  "main": "./out/extension.js",
+  "dependencies": {
+    "axios": "^1.11.0"
+  },
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "liteweight-coding-ai-sidebar-view",
+          "title": "Liteweight AI",
+          "icon": "media/icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "liteweight-coding-ai-sidebar-view": [
+        {
+          "type": "webview",
+          "id": "liteweight-coding-ai-sidebar",
+          "name": "Liteweight AI",
+          "icon": "media/icon.svg",
+          "contextualTitle": "Liteweight AI"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "liteweight-coding-ai.helloWorld",
+        "title": "Hello World"
+      }
+    ]
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile && npm run build:webview",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "pretest": "npm run compile && npm run lint",
+    "lint": "eslint src --ext ts",
+    "test": "node ./out/test/runTest.js",
+    "build:tailwind": "tailwindcss -c tailwind.webview.config.cjs -i ./webview/styles/tailwind.input.css -o ./webview/styles/tailwind.css --minify",
+    "build:webview": "npm run build:tailwind && webpack --config webpack.webview.cjs",
+    "watch:webview": "webpack --watch --config webpack.webview.cjs"
+  },
+  "devDependencies": {
+    "@types/glob": "^8.1.0",
+    "@types/mocha": "^10.0.1",
+    "@types/node": "18.x",
+    "@types/vscode": "^1.80.0",
+    "@typescript-eslint/eslint-plugin": "^6.21.0",
+    "@typescript-eslint/parser": "^6.21.0",
+    "@vscode/test-electron": "^2.3.2",
+    "eslint": "^8.41.0",
+    "glob": "^8.1.0",
+    "markdown-it": "^14.1.0",
+    "mocha": "^10.2.0",
+    "tailwindcss": "^3.4.17",
+    "typescript": "5.3.3",
+    "webpack": "^5.101.3",
+    "webpack-cli": "^5.1.4"
+  }
+}
