@@ -3,7 +3,14 @@ export type OllamaGenerateInput = {
   model: string;
   prompt: string;
   systemPrompt: string;
-  messages: Array<{ role: string; content: string }>;
+  messages?: Array<{ role: string; content: string }>;
+  context?: number[];
+  signal?: AbortSignal;
+};
+
+export type OllamaGenerateResponse = {
+  response: string;
+  context?: number[];
 };
 
 export type OllamaChatMessage = {
@@ -19,14 +26,16 @@ export type OllamaChatInput = {
   messages: OllamaChatMessage[];
   systemPrompt?: string;
   tools?: unknown[];
+  signal?: AbortSignal;
 };
 
 export type OllamaToolCall = {
   id?: string;
   type?: string;
   function?: {
+    index?: number;
     name?: string;
-    arguments?: string;
+    arguments?: Record<string, unknown>;
   };
 };
 
@@ -36,18 +45,20 @@ export type OllamaChatResponse = {
   toolCalls?: OllamaToolCall[];
 };
 
-export async function ollamaGenerate(input: OllamaGenerateInput): Promise<string> {
+export async function ollamaGenerate(input: OllamaGenerateInput): Promise<OllamaGenerateResponse> {
   const res = await fetch(input.baseUrl + "/api/generate", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
     },
+    signal: input.signal,
     body: JSON.stringify({
       model: input.model,
       prompt: input.prompt,
       stream: false,
       system: input.systemPrompt,
       messages: input.messages,
+      context: input.context,
     }),
   });
 
@@ -65,7 +76,10 @@ export async function ollamaGenerate(input: OllamaGenerateInput): Promise<string
     throw new Error("Invalid response from Ollama");
   }
 
-  return result.response;
+  const context = Array.isArray(result.context)
+    ? result.context.filter((value) => typeof value === "number")
+    : undefined;
+  return { response: result.response, context };
 }
 
 export async function ollamaChat(input: OllamaChatInput): Promise<OllamaChatResponse> {
@@ -74,6 +88,7 @@ export async function ollamaChat(input: OllamaChatInput): Promise<OllamaChatResp
     headers: {
       "Content-Type": "application/json",
     },
+    signal: input.signal,
     body: JSON.stringify({
       model: input.model,
       messages: input.messages,
@@ -184,8 +199,9 @@ function normalizeToolCalls(value: unknown): OllamaToolCall[] {
       type: typeof call.type === "string" ? call.type : undefined,
       function: fn
         ? {
+            index: typeof fn.index === "number" ? fn.index : undefined,
             name: typeof fn.name === "string" ? fn.name : undefined,
-            arguments: typeof fn.arguments === "string" ? fn.arguments : undefined,
+            arguments: isRecord(fn.arguments) ? fn.arguments : undefined,
           }
         : undefined,
     };

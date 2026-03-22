@@ -31,5 +31,13 @@ export function createBus() {
     }
   });
 
-  return { send, on };
+  function getState() {
+    return vscode.getState() ?? {};
+  }
+
+  function setState(state) {
+    vscode.setState(state);
+  }
+
+  return { send, on, getState, setState };
 }

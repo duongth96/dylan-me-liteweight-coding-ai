@@ -1,5 +1,5 @@
-import * as vscode from 'vscode';
-import { SidebarProvider } from './sidebarProvider';
+import * as vscode from "vscode";
+import { SidebarProvider } from "./sidebarProvider";
 
 export function activate(context: vscode.ExtensionContext) {
 	console.log('Congratulations, your extension "liteweight-coding-ai" is now active!');
@@ -17,8 +17,7 @@ export function activate(context: vscode.ExtensionContext) {
 	});
 
 	context.subscriptions.push(disposable);
-	// Open DevTools when the extension starts (only in development environment)
-	vscode.commands.executeCommand('workbench.action.toggleDevTools');
+	// vscode.commands.executeCommand("workbench.action.toggleDevTools");
 }
 
 export function deactivate() {

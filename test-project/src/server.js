@@ -65,7 +65,7 @@ function createApp() {
 }
 
 if (require.main === module) {
-  const port = Number(process.env.PORT) //|| 3000;
+  //const port = Number(process.env.PORT) //|| 3000;
   const app = createApp();
   app.listen(port, () => {
     process.stdout.write(`Server listening on http://localhost:${port}\n`);

@@ -23,7 +23,7 @@
         {
           "id": "liteweight-coding-ai-sidebar-view",
           "title": "Liteweight AI",
-          "icon": "media/icon.svg"
+          "icon": "media/robot-ai.svg"
         }
       ]
     },
@@ -33,7 +33,7 @@
           "type": "webview",
           "id": "liteweight-coding-ai-sidebar",
           "name": "Liteweight AI",
-          "icon": "media/icon.svg",
+          "icon": "media/robot-ai.svg",
           "contextualTitle": "Liteweight AI"
         }
       ]
@@ -43,7 +43,69 @@
         "command": "liteweight-coding-ai.helloWorld",
         "title": "Hello World"
       }
-    ]
+    ],
+    "configuration": {
+      "title": "Liteweight Coding AI",
+      "properties": {
+        "liteweight-coding-ai.systemPrompt": {
+          "type": "string",
+          "default": "You are a coding assistant with access to tools.You must follow these rules strictly:1. If the user request involves files, code, or project structure:   → You MUST call a tool.2. Do NOT make up file contents.3. When calling a tool:   → Return ONLY valid JSON with tool_calls   → Do NOT include any explanation or extra text4. Only answer normally when no tool is needed.5. Always prefer using tools over guessing.Available tools will be provided. Tool results are returned as JSON strings. You must parse the JSON and use the data inside.",
+          "description": "Default system prompt for the assistant"
+        },
+        "liteweight-coding-ai.ollama.baseUrl": {
+          "type": "string",
+          "default": "http://localhost:11434",
+          "description": "Base URL for Ollama server"
+        },
+        "liteweight-coding-ai.toolkits.defaultEnabled": {
+          "type": "array",
+          "default": [
+            "list_files",
+            "read_file",
+            "search_code",
+            "search_web"
+          ],
+          "items": {
+            "type": "string"
+          },
+          "description": "Default enabled toolkits when user has not configured toolkits.enabled"
+        },
+        "liteweight-coding-ai.toolkits.enabled": {
+          "type": "array",
+          "default": [
+            "list_files",
+            "read_file",
+            "search_code",
+            "search_web"
+          ],
+          "items": {
+            "type": "string"
+          },
+          "description": "Enabled toolkits for this extension"
+        },
+        "liteweight-coding-ai.toolkits.defaultIgnoreDirs": {
+          "type": "array",
+          "default": [
+            ".git",
+            "node_modules",
+            "out",
+            "dist",
+            ".vscode",
+            ".idea",
+            ".turbo",
+            ".next",
+            ".cache",
+            ".venv",
+            "coverage",
+            "webview"
+          ],
+          "items": {
+            "type": "string"
+          },
+          "description": "Default directories ignored by toolkit file operations"
+        }
+      }
+    }
   },
   "scripts": {
     "vscode:prepublish": "npm run compile && npm run build:webview",

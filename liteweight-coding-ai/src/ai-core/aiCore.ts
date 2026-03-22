@@ -1,29 +1,49 @@
-import { OllamaToolCall, ollamaChat, safeOllamaListModels } from "../ai-api/ollamaApi";
-import {
-  describeToolkitFunctions,
-  getProjectStructureFlat,
-  readFileContent,
-  searchCode,
-} from "./filesMnToolkit";
+import { OllamaToolCall, ollamaChat, ollamaGenerate, safeOllamaListModels } from "../ai-api/ollamaApi";
+import { describeToolkitFunctions } from "./basicToolkit";
+import { executeTool } from "./toolkitExecutor";
 
 type AiCoreDeps = {
-  config: { get<T>(key: string): T | undefined };
+  config: { get<T>(key: string): T | undefined; update(key: string, value: unknown, global?: boolean): Thenable<void> };
   postMessage: (message: { type: string; value?: unknown }) => void;
   showInformationMessage: (message: string) => void;
   showErrorMessage: (message: string) => void;
+  executeCommand: (command: string, ...args: unknown[]) => Thenable<unknown>;
+  workspaceRoot?: string;
 };
 
 type ChatMessage = { role: string; content: string };
 
 export class AiCore {
   private systemPrompt: string;
+  private defaultSystemPrompt: string;
   private messages: ChatMessage[];
+  private chatContext: number[] | null;
+  private isProcessing: boolean;
+  private cancelRequested: boolean;
+  private currentAbortController: AbortController | null;
 
   constructor(systemPrompt: string) {
     this.systemPrompt = systemPrompt;
+    this.defaultSystemPrompt = systemPrompt;
     this.messages = [
       { role: "system", content: this.systemPrompt },
     ];
+    this.chatContext = null;
+    this.isProcessing = false;
+    this.cancelRequested = false;
+    this.currentAbortController = null;
+  }
+
+  private updateSystemMessage(content: string) {
+    if (this.messages.length === 0) {
+      this.messages.push({ role: "system", content });
+      return;
+    }
+    if (this.messages[0].role !== "system") {
+      this.messages.unshift({ role: "system", content });
+      return;
+    }
+    this.messages[0] = { role: "system", content };
   }
 
   public async handleWebviewMessage(data: unknown, deps: AiCoreDeps) {
@@ -52,13 +72,111 @@ export class AiCore {
         });
         break;
       }
+      case "getToolkitSettings": {
+        const toolkitDefinitions = getToolkitDefinitions();
+        const names = toolkitDefinitions.map((toolkit) => toolkit.name);
+        const enabled = getEnabledToolkits(
+          deps.config.get<string[]>("toolkits.enabled"),
+          deps.config.get<string[]>("toolkits.defaultEnabled"),
+          names
+        );
+        deps.postMessage({
+          type: "toolkitSettings",
+          value: { toolkits: toolkitDefinitions, enabled },
+        });
+        break;
+      }
+      case "getSystemPrompt": {
+        const current = deps.config.get<string>("systemPrompt") ?? this.defaultSystemPrompt;
+        deps.postMessage({
+          type: "systemPrompt",
+          value: { systemPrompt: current, defaultSystemPrompt: this.defaultSystemPrompt },
+        });
+        break;
+      }
+      case "updateSystemPrompt": {
+        if (!data.value) {
+          return;
+        }
+        const next =
+          isRecord(data.value) && typeof data.value.systemPrompt === "string"
+            ? data.value.systemPrompt
+            : "";
+        await deps.config.update("systemPrompt", next, true);
+        this.systemPrompt = next || this.defaultSystemPrompt;
+        this.updateSystemMessage(this.systemPrompt);
+        deps.postMessage({
+          type: "systemPrompt",
+          value: { systemPrompt: this.systemPrompt, defaultSystemPrompt: this.defaultSystemPrompt },
+        });
+        break;
+      }
+      case "resetSystemPrompt": {
+        await deps.config.update("systemPrompt", this.defaultSystemPrompt, true);
+        this.systemPrompt = this.defaultSystemPrompt;
+        this.updateSystemMessage(this.systemPrompt);
+        deps.postMessage({
+          type: "systemPrompt",
+          value: { systemPrompt: this.systemPrompt, defaultSystemPrompt: this.defaultSystemPrompt },
+        });
+        break;
+      }
+      case "openExtensionSettings": {
+        await deps.executeCommand("workbench.action.openSettings", "liteweight-coding-ai");
+        break;
+      }
+      case "cancelPrompt": {
+        if (this.currentAbortController) {
+          this.cancelRequested = true;
+          this.currentAbortController.abort();
+        }
+        deps.postMessage({ type: "addResponse", value: "Đã hủy yêu cầu." });
+        break;
+      }
+      case "resetConversationContext": {
+        if (this.currentAbortController) {
+          this.cancelRequested = true;
+          this.currentAbortController.abort();
+        }
+        this.messages = [{ role: "system", content: this.systemPrompt }];
+        this.chatContext = null;
+        this.isProcessing = false;
+        this.cancelRequested = false;
+        this.currentAbortController = null;
+        deps.postMessage({ type: "processingEnd" });
+        break;
+      }
+      case "updateToolkitSettings": {
+        if (!data.value) {
+          return;
+        }
+        const toolkitDefinitions = getToolkitDefinitions();
+        const names = toolkitDefinitions.map((toolkit) => toolkit.name);
+        const enabled =
+          isRecord(data.value) && Array.isArray(data.value.enabledToolkits)
+            ? data.value.enabledToolkits.filter((name) => typeof name === "string" && names.includes(name))
+            : getEnabledToolkits(undefined, deps.config.get<string[]>("toolkits.defaultEnabled"), names);
+        await deps.config.update("toolkits.enabled", enabled, true);
+        deps.postMessage({
+          type: "toolkitSettings",
+          value: { toolkits: toolkitDefinitions, enabled },
+        });
+        break;
+      }
       case "onSendMessage": {
         if (!data.value) {
           return;
         }
+        if (this.isProcessing) {
+          deps.postMessage({
+            type: "addResponse",
+            value: "Please wait, processing previous request...",
+          });
+          return;
+        }
 
         const baseUrl = deps.config.get<string>("ollama.baseUrl") ?? "http://localhost:11434";
-        const configModel = deps.config.get<string>("ollama.model") ?? "deepcoder:1.5b";
+        const configModel = deps.config.get<string>("ollama.model") ?? "qwen2.5:7b";
 
         const prompt =
           isRecord(data.value) && typeof data.value.prompt === "string"
@@ -68,74 +186,166 @@ export class AiCore {
           isRecord(data.value) && typeof data.value.model === "string" && data.value.model.length > 0
             ? data.value.model
             : configModel;
+        const mode =
+          isRecord(data.value) && typeof data.value.mode === "string"
+            ? data.value.mode
+            : "coder";
+
+        this.isProcessing = true;
+        this.cancelRequested = false;
+        this.currentAbortController = new AbortController();
+        deps.postMessage({ type: "processingStart" });
 
         try {
+          const activeSystemPrompt =
+            deps.config.get<string>("systemPrompt") ?? this.defaultSystemPrompt;
+          this.systemPrompt = activeSystemPrompt;
+          this.updateSystemMessage(activeSystemPrompt);
+          if (mode === "chat") {
+            if (this.cancelRequested) {
+              deps.postMessage({ type: "addResponse", value: "Đã hủy yêu cầu." });
+              break;
+            }
+            const response = await ollamaGenerate({
+              baseUrl,
+              model,
+              prompt,
+              systemPrompt: activeSystemPrompt,
+              context: this.chatContext ?? undefined,
+              signal: this.currentAbortController?.signal,
+            });
+            deps.postMessage({
+              type: "addResponse",
+              value: response.response,
+            });
+            this.chatContext = response.context ?? this.chatContext;
+            this.messages.push({ role: "user", content: prompt });
+            this.messages.push({ role: "assistant", content: response.response });
+            break;
+          }
+
           const tools = describeToolkitFunctions();
+          const toolNames = tools
+            .map((tool) => tool.function?.name)
+            .filter((name): name is string => typeof name === "string");
+          const enabledToolkits = getEnabledToolkits(
+            deps.config.get<string[]>("toolkits.enabled"),
+            deps.config.get<string[]>("toolkits.defaultEnabled"),
+            toolNames
+          );
+          const filteredTools = tools.filter((tool) =>
+            enabledToolkits.includes(tool.function?.name ?? "")
+          );
           const loopMessages: {
             role: string;
             content: string;
-            name?: string;
+            tool_name?: string;
             tool_call_id?: string;
           }[] = [...this.messages, { role: "user", content: prompt }];
-          const maxLoops = 6;
+          const maxLoops = 20;
+          let loopCount = 0;
+          let privToolName = "";
 
           let finalResponse = "";
           let handled = false;
-          for (let i = 0; i < maxLoops; i += 1) {
+          while(loopCount < maxLoops) {
+            if (this.cancelRequested) {
+              deps.postMessage({ type: "addResponse", value: "Canceled." });
+              handled = true;
+              break;
+            }
             const response = await ollamaChat({
               baseUrl,
               model,
               messages: loopMessages,
-              tools,
+              tools: filteredTools,
+              signal: this.currentAbortController?.signal,
             });
+            loopCount += 1;
 
-            if (!response.toolCalls) {
+            if (!response.toolCalls || response.toolCalls.length === 0) {
               finalResponse = response.content;
               deps.postMessage({
                 type: "addResponse",
-                value: finalResponse,
+                value: `${finalResponse}`,
+              });
+              deps.postMessage({
+                type: "addResponse",
+                value: "DONE!",
               });
               this.messages.push({ role: "user", content: prompt });
               this.messages.push(response);
               handled = true;
               break;
             }
-            deps.postMessage({
-              type: "addResponse",
-              value: response.content?response.content:"...",
-            });
+            if(response.content){
+              deps.postMessage({
+                type: "addResponse",
+                value: response.content,
+              });
+            }
+            
             loopMessages.push(response);
 
-            const toolResults = await runToolCalls(response.toolCalls, deps);
+            const toolResults = await runToolCalls(response.toolCalls, deps, deps.workspaceRoot);
             for (const toolResult of toolResults) {
               loopMessages.push({
                 role: "tool",
                 content: toolResult.content,
-                name: toolResult.name,
+                tool_name: toolResult.tool_name,
                 tool_call_id: toolResult.tool_call_id,
               });
+              if(toolResult.tool_name != privToolName){
+                privToolName = toolResult.tool_name||"";
+                loopCount = 0;
+              }
+              switch(toolResult.tool_name){
+                case "run_command": {
+                  deps.postMessage({
+                    type: "addResponse",
+                    value: `\`\`\`output\n${toolResult.content}\n\`\`\``,
+                  });
+                  break
+                }
+                default:
+                  break;
+              }
             }
           }
-          console.log(loopMessages);
+          
           if (!handled) {
             deps.postMessage({
               type: "addResponse",
-              value: "AI xử lý quá lâu, vui lòng thử lại.",
+              value: "AI overload, try again.",
             });
           }
+          console.log(`[lwai:ollama] loopMessages: `, loopMessages);
         } catch (error) {
-          const message = error instanceof Error ? error.message : String(error);
-          const maybeModels = await safeOllamaListModels(baseUrl);
-          const modelHelp =
-            maybeModels && maybeModels.length > 0
-              ? `\n\n**Available models:**\n\n${maybeModels
-                  .map((m) => `- \`${m}\``)
-                  .join("\n")}\n`
-              : "";
-          deps.postMessage({
-            type: "addResponse",
-            value: `**Ollama error:**\n\n\`\`\`\n${message}\n\`\`\`${modelHelp}`,
-          });
+          if (error instanceof Error && error.name === "AbortError") {
+            if (!this.cancelRequested) {
+              deps.postMessage({ type: "addResponse", value: "Canceled." });
+            }
+          } else if (this.cancelRequested) {
+            deps.postMessage({ type: "addResponse", value: "Canceled." });
+          } else {
+            const message = error instanceof Error ? error.message : String(error);
+            const maybeModels = await safeOllamaListModels(baseUrl);
+            const modelHelp =
+              maybeModels && maybeModels.length > 0
+                ? `\n\n**Available models:**\n\n${maybeModels
+                    .map((m) => `- \`${m}\``)
+                    .join("\n")}\n`
+                : "";
+            deps.postMessage({
+              type: "addResponse",
+              value: `**Ollama error:**\n\n\`\`\`\n${message}\n\`\`\`${modelHelp}`,
+            });
+          }
+        } finally {
+          this.isProcessing = false;
+          this.cancelRequested = false;
+          this.currentAbortController = null;
+          deps.postMessage({ type: "processingEnd" });
         }
         break;
       }
@@ -154,6 +364,8 @@ export class AiCore {
         break;
       }
     }
+
+    console.log(`[lwai:ollama] messages: `, this.messages);
   }
 }
 
@@ -162,98 +374,90 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 type ToolResult = {
-  name?: string;
+  tool_name?: string;
   tool_call_id?: string;
   content: string;
 };
 
-async function runToolCalls(toolCalls: OllamaToolCall[], deps: AiCoreDeps): Promise<ToolResult[]> {
+async function runToolCalls(
+  toolCalls: OllamaToolCall[],
+  deps: AiCoreDeps,
+  defaultRootPath?: string
+): Promise<ToolResult[]> {
   const results: ToolResult[] = [];
   for (const call of toolCalls) {
     const name = call.function?.name;
     const args = parseArgs(call.function?.arguments);
     if (!name) {
       results.push({
-        name,
+        tool_name: name,
         tool_call_id: call.id,
         content: "Invalid tool call",
       });
       continue;
     }
-
-    deps.postMessage({
-      type: "addResponse",
-      value: `**AI đang xử lý:** ${name}`,
-    });
-
+    
+    if (name === "read_file" || name === "write_file") {
+      deps.postMessage({
+        type: "addResponse",
+        value: `**AI is processing:** ${name}(${JSON.stringify(args)})`,
+      });
+    } else {
+      deps.postMessage({
+        type: "addResponse",
+        value: `**AI is processing:** ${name}`,
+      });
+    }
     try {
-      const content = await executeTool(name, args);
+      const content = await executeTool(name, args, { defaultRootPath });
       results.push({
-        name,
+        tool_name: name,
         tool_call_id: call.id,
         content,
       });
+      console.log(`[lwai:toolkit] ${name}(${JSON.stringify(args)}) => ${content}`);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       results.push({
-        name,
+        tool_name: name,
         tool_call_id: call.id,
         content: `Tool error: ${message}`,
       });
+      console.error(`[lwai:toolkit] ${name}(${JSON.stringify(args)}) => ${message}`);
     }
   }
   return results;
 }
 
-async function executeTool(name: string, args: Record<string, unknown>): Promise<string> {
-  if (name === "get_project_structure") {
-    const rootPath = String(args.rootPath ?? "");
-    const ignoreDirs = toStringArray(args.ignoreDirs);
-    const includeExtensions = toStringArray(args.includeExtensions);
-    return await getProjectStructureFlat(rootPath, {
-      ignoreDirs: ignoreDirs.length > 0 ? ignoreDirs : undefined,
-      includeExtensions: includeExtensions.length > 0 ? includeExtensions : undefined,
-    });
-  }
-
-  if (name === "read_file") {
-    const filePath = String(args.path ?? "");
-    const maxChars = typeof args.maxChars === "number" ? args.maxChars : undefined;
-    return await readFileContent(filePath, { maxChars });
-  }
-
-  if (name === "search_code") {
-    const rootPath = String(args.rootPath ?? "");
-    const query = String(args.query ?? "");
-    const ignoreDirs = toStringArray(args.ignoreDirs);
-    const includeExtensions = toStringArray(args.includeExtensions);
-    const maxResults = typeof args.maxResults === "number" ? args.maxResults : undefined;
-    const matches = await searchCode(rootPath, query, {
-      ignoreDirs: ignoreDirs.length > 0 ? ignoreDirs : undefined,
-      includeExtensions: includeExtensions.length > 0 ? includeExtensions : undefined,
-      maxResults,
-    });
-    return JSON.stringify(matches);
-  }
-
-  throw new Error(`Unknown tool: ${name}`);
-}
-
-function parseArgs(value?: string): Record<string, unknown> {
+function parseArgs(value?: Record<string, unknown>): Record<string, unknown> {
   if (!value) {
     return {};
   }
-  try {
-    const parsed = JSON.parse(value) as unknown;
-    return isRecord(parsed) ? parsed : {};
-  } catch {
-    return {};
-  }
+  return isRecord(value) ? value : {};
 }
 
-function toStringArray(value: unknown): string[] {
-  if (!Array.isArray(value)) {
-    return [];
+function getToolkitDefinitions(): Array<{ name: string; description: string }> {
+  const tools = describeToolkitFunctions();
+  const mapped = tools
+    .map((tool) => ({
+      name: typeof tool.function?.name === "string" ? tool.function.name : "",
+      description: typeof tool.function?.description === "string" ? tool.function.description : "",
+    }))
+    .filter((tool) => tool.name.length > 0);
+  return mapped;
+}
+
+function getEnabledToolkits(
+  value: unknown,
+  defaults: unknown,
+  allNames: string[]
+): string[] {
+  const fallback =
+    Array.isArray(defaults) && defaults.length > 0
+      ? defaults.filter((name) => typeof name === "string" && allNames.includes(name))
+      : allNames.filter((name) => name !== "write_file" && name !== "run_command");
+  if (Array.isArray(value)) {
+    return value.filter((name) => typeof name === "string" && allNames.includes(name));
   }
-  return value.filter((v) => typeof v === "string") as string[];
+  return fallback;
 }

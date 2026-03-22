@@ -13,6 +13,10 @@ export const MessageList = {
       type: Array,
       required: true,
     },
+    isProcessing: {
+      type: Boolean,
+      default: false,
+    },
   },
   render() {
     const { h } = Vue;
@@ -24,10 +28,10 @@ export const MessageList = {
       const bubbleClass = [
         "message",
         role,
-        "max-w-[92%] rounded-lg px-3 py-2 text-sm leading-6 shadow-sm",
+        "rounded-lg px-3 py-2 text-sm leading-6",
         role === "user"
-          ? "ml-auto bg-[var(--vscode-button-background)] text-[var(--vscode-button-foreground)]"
-          : "mr-auto bg-[var(--vscode-editor-inactiveSelectionBackground)] text-[var(--vscode-editor-foreground)]",
+          ? "shadow-sm ml-auto bg-[var(--vscode-button-background)] text-[var(--vscode-button-foreground)]"
+          : "mr-auto text-[var(--vscode-editor-foreground)]",
       ];
 
       const assistantContentClass =
@@ -49,6 +53,38 @@ export const MessageList = {
       return h("div", { key: index, class: bubbleClass }, [content]);
     });
 
-    return h("div", { class: "messages flex-1 overflow-y-auto px-3 py-3 pb-40" }, messageNodes);
+    const loadingNode = this.isProcessing
+      ? h(
+          "div",
+          {
+            class:
+              "message assistant mr-auto rounded-lg px-3 py-2 text-sm " +
+              "text-[var(--vscode-editor-foreground)]",
+          },
+          [
+            h(
+              "div",
+              {
+                class:
+                  "content flex items-center gap-2 text-sm leading-6 " +
+                  "text-[var(--vscode-editor-foreground)]",
+              },
+              [
+                h("span", { class: "h-3 w-3 animate-spin rounded-full border border-current border-t-transparent" }),
+                h("span", {}, "Thinking..."),
+              ]
+            ),
+          ]
+        )
+      : null;
+
+    return h(
+      "div",
+      {
+        class: "messages flex-1 overflow-y-auto px-3 py-3 pb-40",
+        style: { paddingBottom: "14rem" },
+      },
+      loadingNode ? [...messageNodes, loadingNode] : messageNodes
+    );
   },
 };

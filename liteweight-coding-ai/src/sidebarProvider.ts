@@ -14,9 +14,9 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     const config = vscode.workspace.getConfiguration("liteweight-coding-ai");
 
     this._view = webviewView;
-    this._aiCore = new AiCore(
-      "You are a coding assistant with access to tools.You must follow these rules strictly:1. If the user request involves files, code, or project structure:   → You MUST call a tool.2. Do NOT make up file contents.3. When calling a tool:   → Return ONLY valid JSON with tool_calls   → Do NOT include any explanation or extra text4. Only answer normally when no tool is needed.5. Always prefer using tools over guessing.Available tools will be provided."
-    );
+    const defaultSystemPrompt =
+      "You are a coding assistant with access to tools.You must follow these rules strictly:1. If the user request involves files, code, or project structure:   → You MUST call a tool.2. Do NOT make up file contents.3. When calling a tool:   → Return ONLY valid JSON with tool_calls   → Do NOT include any explanation or extra text4. Only answer normally when no tool is needed.5. Always prefer using tools over guessing.Available tools will be provided. Tool results are returned as JSON strings. You must parse the JSON and use the data inside.";
+    this._aiCore = new AiCore(defaultSystemPrompt);
 
     webviewView.webview.options = {
       // Allow scripts in the webview
@@ -39,6 +39,8 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
         postMessage: (message) => webviewView.webview.postMessage(message),
         showInformationMessage: (message) => vscode.window.showInformationMessage(message),
         showErrorMessage: (message) => vscode.window.showErrorMessage(message),
+        executeCommand: (command, ...args) => vscode.commands.executeCommand(command, ...args),
+        workspaceRoot: vscode.workspace.workspaceFolders?.[0]?.uri.fsPath,
       });
     });
   }
