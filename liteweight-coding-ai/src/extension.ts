@@ -17,6 +17,8 @@ export function activate(context: vscode.ExtensionContext) {
 	});
 
 	context.subscriptions.push(disposable);
+	// Open DevTools when the extension starts (only in development environment)
+	vscode.commands.executeCommand('workbench.action.toggleDevTools');
 }
 
 export function deactivate() {

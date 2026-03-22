@@ -1,0 +1,291 @@
+info:
+  name: /api/chat
+  type: http
+  seq: 3
+
+http:
+  method: POST
+  url: http://localhost:11434/api/chat
+  body:
+    type: json
+    data: |-
+      {
+        "model": "qwen2.5:7b",
+        "stream": false,
+        "messages": [
+          {
+            "role": "system",
+            "content": "{{sysPrompt}}"
+          },
+      //     {
+      //       "role":"tool",
+      //       "name":"project_basic_info",
+      //       "content":"lang:javascript;html;css\nfiles:/packages.json;/src/main.js;/src/login.js;/src/route.js;/src/components/dashboard.js;/src/components/about.js"
+      //     },
+          {
+            "role":"user",
+            "content": "help me fix some bugs in login file"
+          }
+          /// next
+
+        ],
+        "tools": [
+          {
+            "type": "function",
+            "function": {
+              "name": "read_file",
+              "description": "Read the full content of a file",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "path": {
+                    "type": "string",
+                    "description": "Relative path to the file"
+                  }
+                },
+                "required": ["path"]
+              }
+            }
+          },
+          {
+            "type": "function",
+            "function": {
+              "name": "search_code",
+              "description": "Search for code snippets or keywords across the project",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "query": {
+                    "type": "string",
+                    "description": "Keyword or code pattern to search"
+                  }
+                },
+                "required": ["query"]
+              }
+            }
+          }
+          ,
+          {
+            "type": "function",
+            "function": {
+              "name": "project_struct",
+              "description": "Get project structure from project root folder or at any start path in project",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "path": {
+                    "type": "string",
+                    "description": "Start from path or empty for from root folder"
+                  }
+                }
+              }
+            }
+          }
+        ],
+        
+        "options": {
+          "num_keep": 24,
+          "seed": 42,
+
+          "num_predict": 512,
+
+          "temperature": 0.2,
+          "top_k": 40,
+          "top_p": 0.9,
+          "min_p": 0.05,
+          "typical_p": 1.0,
+
+          "repeat_last_n": 64,
+          "repeat_penalty": 1.1,
+          "presence_penalty": 0.0,
+          "frequency_penalty": 0.0,
+          "penalize_newline": false,
+
+          "stop": [
+              "\n\n\n",
+              "```output",
+              "END"
+          ],
+
+          "num_ctx": 4096,
+          "num_batch": 8,
+
+          "num_gpu": 29,
+          "main_gpu": 0,
+          "use_mmap": true,
+          "num_thread": 8
+        }
+      }
+  auth: inherit
+
+runtime:
+  variables:
+    - name: sysPrompt
+      value: "You are a coding assistant with access to tools.You must follow these rules strictly:1. If the user request involves files, code, or project structure:   → You MUST call a tool.2. Do NOT make up file contents.3. When calling a tool:   → Return ONLY valid JSON with tool_calls   → Do NOT include any explanation or extra text4. Only answer normally when no tool is needed.5. Always prefer using tools over guessing.Available tools will be provided."
+    - name: priv_context
+      value: "[]"
+  scripts:
+    - type: after-response
+      code: |-
+        // 1. Lấy dữ liệu trả về từ API
+        const data = res.getBody();
+
+        // 2. Trích xuất trường bạn cần (ví dụ trường 'access_token' hoặc 'id')
+        const myValue = data.context; 
+
+        // 3. Lưu vào biến Environment hoặc Runtime để dùng cho các request sau
+        // Lưu vào Environment (khuyên dùng nếu cần dùng lâu dài)
+        bru.setVar("priv_context", myValue);
+
+        // Hoặc lưu vào Runtime (biến tạm, mất khi tắt Bruno)
+        // bru.setVar("my_shared_token", myValue);
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+
+docs: |-
+  ```JSON
+  {
+    "model": "deepseek-coder:6.7b",
+    "system": "{{sysPrompt}}",
+    "prompt": "tôi cần fix bug trong file login.js",
+    "stream": false,
+    //"context": {{priv_context}},
+  //   "messages": [
+  //     {
+  //       "role": "system",
+  //       "content": "You are a senior software engineer."
+  //     },
+  //     {
+  //       "role": "system",
+  //       "content": "You can use tools when necessary. Only call tools if needed."
+  //     },
+  //     {
+  //       "role": "system",
+  //       "content": "When you have enough information, return the final answer."
+  //     }
+  //   ],
+    "tools": [
+      {
+        "type": "function",
+        "function": {
+          "name": "read_file",
+          "description": "Read the full content of a file",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "path": {
+                "type": "string",
+                "description": "Relative path to the file"
+              }
+            },
+            "required": ["path"]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "write_file",
+          "description": "Write content to a file (overwrite بالكامل)",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "path": {
+                "type": "string"
+              },
+              "content": {
+                "type": "string"
+              }
+            },
+            "required": ["path", "content"]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "search_code",
+          "description": "Search for code snippets or keywords across the project",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "query": {
+                "type": "string",
+                "description": "Keyword or code pattern to search"
+              }
+            },
+            "required": ["query"]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "list_files",
+          "description": "List files in a directory",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "path": {
+                "type": "string",
+                "description": "Directory path"
+              }
+            },
+            "required": ["path"]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "run_command",
+          "description": "Execute a terminal command",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "command": {
+                "type": "string"
+              }
+            },
+            "required": ["command"]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "web_search",
+          "description": "Search information on the web",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "query": {
+                "type": "string"
+              }
+            },
+            "required": ["query"]
+          }
+        }
+      }
+    ],
+    
+    "options": {
+      "seed": 42,
+
+      "num_predict": 512,
+      "max_tokens": 2048,
+
+      "temperature": 0.2,
+      "top_p": 0.9,
+
+      "num_gpu": 29,
+      "main_gpu": 0,
+      "use_mmap": true,
+      "num_thread": 8
+    }
+  }
+  ```

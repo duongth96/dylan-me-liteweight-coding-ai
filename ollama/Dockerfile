@@ -1,4 +1,4 @@
-FROM debian:bookworm-slim AS ollama-base
+FROM nvidia/cuda:12.6.3-base-ubuntu22.04 AS ollama-base
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     bash ca-certificates curl gawk grep sed findutils tar zstd \
@@ -20,11 +20,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY autologin.sh /autologin.sh
 COPY init-users.sh /init-users.sh
 COPY start.sh /start.sh
-RUN chmod +x /autologin.sh /init-users.sh /start.sh
+RUN sed -i 's/\r$//' /autologin.sh /init-users.sh /start.sh \
+    && chmod +x /autologin.sh /init-users.sh /start.sh
 
 # Thiết lập biến môi trường
 ENV TINI_KILL_PROCESS_GROUP=1
 ENV OLLAMA_HOST=0.0.0.0
+ENV NVIDIA_VISIBLE_DEVICES=all
+ENV NVIDIA_DRIVER_CAPABILITIES=compute,utility
 ENV WEBTTY_USER=ollama
 ENV WEBTTY_PASSWORD=1324
 

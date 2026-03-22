@@ -7,9 +7,16 @@ services:
       - "11434:11434"
       - "7681:7681"
     volumes:
-      - ./models:/root/.ollama
+      - ./ollama-data:/root/.ollama
     environment:
       - CRE_USER=admin
-      - CRE_PASSWORD=admin
+      - CRE_PASSWORD=password
       - WEBTTY_USER=ollama
-      - WEBTTY_PASSWORD=1324
+      - WEBTTY_PASSWORD=ollama
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all # Hoặc thay 'all' bằng số lượng GPU bạn muốn (ví dụ: 1)
+              capabilities: [gpu]
