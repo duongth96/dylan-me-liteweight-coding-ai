@@ -53,7 +53,7 @@ export async function getProjectStructureFlat(
     return { error: "Missing root path. Please provide root path." };
   }
   const ignoreDirs = new Set(options.ignoreDirs ?? defaultIgnoreDirs());
-  const includeExtensions = options.includeExtensions ?? [];
+  const includeExtensions = normalizeExtensions(options.includeExtensions ?? []);
   const files = await collectFiles(rootPath, ignoreDirs, includeExtensions);
   const normalized = files.map((file) =>
     path.relative(rootPath, file).split(path.sep).join("/")
@@ -118,7 +118,7 @@ export async function searchCode(
     return { error: "Missing root path. Please provide root path." };
   }
   const ignoreDirs = new Set(options.ignoreDirs ?? defaultIgnoreDirs());
-  const includeExtensions = options.includeExtensions ?? [];
+  const includeExtensions = normalizeExtensions(options.includeExtensions ?? []);
   const maxResults = options.maxResults ?? 200;
   const files = await collectFiles(rootPath, ignoreDirs, includeExtensions);
   const matches: SearchMatch[] = [];
@@ -452,6 +452,18 @@ function defaultIgnoreDirs(): string[] {
     "coverage",
     "webview",
   ];
+}
+
+function normalizeExtensions(extensions: string[]): string[] {
+  return extensions
+    .map((ext) => {
+      const trimmed = String(ext ?? "").trim();
+      if (!trimmed) {
+        return "";
+      }
+      return trimmed.startsWith(".") ? trimmed : `.${trimmed}`;
+    })
+    .filter((ext) => ext.length > 1);
 }
 
 function buildRegex(input: string): RegExp {
