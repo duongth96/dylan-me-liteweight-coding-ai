@@ -103,6 +103,16 @@
             "type": "string"
           },
           "description": "Default directories ignored by toolkit file operations"
+        },
+        "liteweight-coding-ai.search.engines": {
+          "type": "array",
+          "default": [
+            "https://duckduckgo.com/html/?q=@q"
+          ],
+          "items": {
+            "type": "string"
+          },
+          "description": "Search engine URLs with @q placeholder"
         }
       }
     }

@@ -385,6 +385,7 @@ async function runToolCalls(
   defaultRootPath?: string
 ): Promise<ToolResult[]> {
   const results: ToolResult[] = [];
+  const searchEngines = deps.config.get<string[]>("search.engines");
   for (const call of toolCalls) {
     const name = call.function?.name;
     const args = parseArgs(call.function?.arguments);
@@ -409,7 +410,7 @@ async function runToolCalls(
       });
     }
     try {
-      const content = await executeTool(name, args, { defaultRootPath });
+      const content = await executeTool(name, args, { defaultRootPath, searchEngines });
       results.push({
         tool_name: name,
         tool_call_id: call.id,

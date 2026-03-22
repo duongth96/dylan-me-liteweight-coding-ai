@@ -10,6 +10,7 @@ import {
 
 export type ToolkitExecutorOptions = {
   defaultRootPath?: string;
+  searchEngines?: string[];
 };
 
 export async function executeTool(
@@ -75,7 +76,7 @@ export async function executeTool(
   if (name === "search_web") {
     const keyword = getStringArg(args, ["keyword", "query"]) ?? "";
     const maxResults = typeof args.maxResults === "number" ? args.maxResults : undefined;
-    const results = await searchWeb(keyword, { maxResults });
+    const results = await searchWeb(keyword, { maxResults, engines: options.searchEngines });
     return JSON.stringify(results);
   }
 

@@ -26,6 +26,7 @@ type SearchOptions = {
 
 type WebSearchOptions = {
   maxResults?: number;
+  engines?: string[];
 };
 
 type RunCommandOptions = {
@@ -181,30 +182,31 @@ export async function searchWeb(
     return { error: "Missing keyword. Please provide search keyword." };
   }
   const maxResults = options.maxResults ?? 8;
-  const scriptPath = path.join(__dirname, "bash", "search_web.sh");
-  const args = `${escapeShellArg(query)}`;
-  return await new Promise((resolve) => {
-    exec(
-      `bash "${scriptPath}" ${args}`,
-      { timeout: 15000, maxBuffer: 500_000, env: { ...process.env, MAX_RESULTS: String(maxResults) } },
-      (error, stdout, stderr) => {
-        if (error) {
-          resolve({ error: `Web search failed: ${stderr || error.message}` });
-          return;
-        }
-        try {
-          const parsed = JSON.parse(stdout) as unknown;
-          if (!isRecord(parsed)) {
-            resolve({ error: "Invalid web search response." });
-            return;
-          }
-          resolve(parsed as { query: string; results: Array<{ title: string; url: string; snippet: string }> });
-        } catch (err) {
-          resolve({ error: `Invalid web search response: ${err instanceof Error ? err.message : String(err)}` });
-        }
+  try {
+    const engines = normalizeSearchEngines(options.engines);
+    const queryString = encodeURIComponent(query);
+    for (const engine of engines) {
+      const url = engine.replace(/@q/g, queryString);
+      const response = await fetch(url, {
+        headers: {
+          "User-Agent":
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36",
+          "Accept-Language": "en-US,en;q=0.9",
+        },
+      });
+      if (!response.ok) {
+        continue;
       }
-    );
-  });
+      const html = await response.text();
+      const results = extractDuckDuckGoResults(html, maxResults);
+      if (results.length > 0) {
+        return { query, results };
+      }
+    }
+    return { query, results: [] };
+  } catch (error) {
+    return { error: `Web search failed: ${error instanceof Error ? error.message : String(error)}` };
+  }
 }
 
 export async function runCommand(
@@ -384,12 +386,48 @@ export function describeToolkitFunctions() {
   ];
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
+function extractDuckDuckGoResults(html: string, maxResults: number) {
+  const results: Array<{ title: string; url: string; snippet: string }> = [];
+  const blockRegex = /<div class="result[^"]*"[\s\S]*?<\/div>\s*<\/div>/g;
+  const blocks = html.match(blockRegex) ?? [];
+  for (const block of blocks) {
+    if (results.length >= maxResults) {
+      break;
+    }
+    const titleMatch = block.match(/<a[^>]*class="result__a"[^>]*>([\s\S]*?)<\/a>/);
+    const urlMatch = block.match(/<a[^>]*class="result__a"[^>]*href="([^"]+)"/);
+    const snippetMatch = block.match(/<a[^>]*class="result__snippet"[^>]*>([\s\S]*?)<\/a>/);
+    const title = titleMatch ? decodeHtml(stripTags(titleMatch[1])) : "";
+    const url = urlMatch ? decodeHtml(urlMatch[1]) : "";
+    const snippet = snippetMatch ? decodeHtml(stripTags(snippetMatch[1])) : "";
+    if (!title || !url) {
+      continue;
+    }
+    results.push({ title, url, snippet });
+  }
+  return results;
 }
 
-function escapeShellArg(value: string): string {
-  return `"${value.replace(/"/g, '\\"')}"`;
+function stripTags(value: string) {
+  return value.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+}
+
+function decodeHtml(value: string) {
+  return value
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&nbsp;/g, " ");
+}
+
+function normalizeSearchEngines(engines?: string[]): string[] {
+  const cleaned = Array.isArray(engines)
+    ? engines.map((item) => String(item ?? "").trim()).filter((item) => item.length > 0)
+    : [];
+  const filtered = cleaned.filter((item) => item.includes("@q"));
+  return filtered.length > 0 ? filtered : ["https://duckduckgo.com/html/?q=@q"];
 }
 
 async function collectFiles(
