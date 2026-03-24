@@ -6,6 +6,10 @@ info:
 http:
   method: POST
   url: http://localhost:11434/api/chat
+  params:
+    - name: ""
+      value: ""
+      type: query
   body:
     type: json
     data: |-
@@ -13,58 +17,7 @@ http:
         "model": "qwen2.5-coder:3b",
         "stream": false,
         "messages": {{safe_messages}},
-        "tools": [
-          {
-            "type": "function",
-            "function": {
-              "name": "list_files",
-              "description": "List all file of relative path",
-              "parameters": {
-                "type": "object",
-                "properties": {
-                  "path": {
-                    "type": "string",
-                    "description": "Start from path or empty for from root folder"
-                  }
-                }
-              }
-            }
-          },
-          {
-            "type": "function",
-            "function": {
-              "name": "read_file",
-              "description": "Read the full content of a file",
-              "parameters": {
-                "type": "object",
-                "properties": {
-                  "path": {
-                    "type": "string",
-                    "description": "Relative path to the file"
-                  }
-                },
-                "required": ["path"]
-              }
-            }
-          },
-          {
-            "type": "function",
-            "function": {
-              "name": "search_code",
-              "description": "Search for code snippets or keywords across the project",
-              "parameters": {
-                "type": "object",
-                "properties": {
-                  "query": {
-                    "type": "string",
-                    "description": "Keyword or code pattern to search"
-                  }
-                },
-                "required": ["query"]
-              }
-            }
-          }
-        ],
+        "tools": [{"type":"function","function":{"name":"list_files","description":"Get project structure as a flat list of relative paths","parameters":{"type":"object","properties":{"ignoreDirs":{"type":"array","items":{"type":"string"},"description":"Directories to ignore (EX: node_modules, .git, .vscode, etc...)"},"includeExtensions":{"type":"array","items":{"type":"string"},"description":"File extensions to include (EX: .js, .ts, .jsx, .tsx, etc...)"}}}}},{"type":"function","function":{"name":"read_file","description":"Read file content and return { file, content }","parameters":{"type":"object","properties":{"file":{"type":"string","description":"Relative path from project root"},"maxChars":{"type":"number","description":"Maximum characters to return"},"fromLine":{"type":"number","description":"Start reading from this line number (1-based)"},"startChar":{"type":"number","description":"Start reading from this character position"}},"required":["file"]}}},{"type":"function","function":{"name":"write_file","description":"Write content to a file (overwrite existing content)","parameters":{"type":"object","properties":{"path":{"type":"string","description":"File path to write"},"content":{"type":"string","description":"Full file content"}},"required":["path","content"]}}},{"type":"function","function":{"name":"search_code","description":"Search code by string or regex in all file from project folder","parameters":{"type":"object","properties":{"keyword":{"type":"string","description":"Search string or regex, e.g. /foo.*/i"},"ignoreDirs":{"type":"array","items":{"type":"string"},"description":"Directories to ignore"},"includeExtensions":{"type":"array","items":{"type":"string"},"description":"File extensions to include"},"maxResults":{"type":"number","description":"Maximum matches to return"}},"required":["keyword"]}}},{"type":"function","function":{"name":"search_web","description":"Search the web and return a short list of results","parameters":{"type":"object","properties":{"keyword":{"type":"string","description":"Search keyword"},"maxResults":{"type":"number","description":"Maximum results to return"}},"required":["keyword"]}}},{"type":"function","function":{"name":"run_command","description":"Run a shell command and return output","parameters":{"type":"object","properties":{"command":{"type":"string","description":"Command to run"}},"required":["command"]}}}],
         "options": {
           "num_keep": 24,
           "seed": 42,
@@ -102,48 +55,51 @@ http:
 
 runtime:
   variables:
+    - name: clear_vars
+      value: "true"
     - name: user_query
-      value: Hello, list my files
+      value: I have error when npm start my project, need you fix it
     - name: tool_result
-      value: ""
+      value: '{"results":["package-lock.json","src\server.js","package.json"]}'
   scripts:
     - type: before-request
       code: |-
-        //bru.deleteAllVars();
-        // 1. Lấy danh sách messages cũ từ biến môi trường/collection (nếu chưa có thì tạo mảng rỗng)
-        let messages = bru.getVar("chat_history");
-        if (!messages) {
-          messages = [];
-        }
+        bru.deleteAllVars();
 
-        // 2. Định nghĩa System Prompt (với đầy đủ format tool của bạn)
         const sysPrompt = `you are coding assistant.
-        you can use tools.
+        you can use tools. tool allays return JSON structure.
         you need call tool like.
         example:
         \`\`\`tool
         [{"name":"read_file","args":["src/file.text"]}]
         \`\`\``;
 
-        // 3. Nếu là tin nhắn đầu tiên, hãy push System Prompt vào
+          
+        // 1. Lấy danh sách messages cũ từ biến môi trường/collection (nếu chưa có thì tạo mảng rỗng)
+        let messages = bru.getVar("chat_history");
+        if (!messages) {
+          messages = [];
+        }
+
         if (messages.length === 0) {
           messages.push({ role: "system", content: sysPrompt });
         }
 
-        // 4. Lấy câu hỏi hiện tại từ một biến khác (ví dụ user_input) hoặc nhập cứng
-        let currentUserInput = bru.getVar("user_query");
+        let currentUserInput = bru.getEnvVar("user_query"); 
+        console.log(currentUserInput);
         if(currentUserInput)
           messages.push({ role: "user", content: currentUserInput });
 
-        let toolRs = bru.getVar("tool_result");
-        if(toolRs)
-          messages.push({role:"tool", name:""})
+        let toolContent = bru.getVar("tool_result");
+        let tools = bru.getVar("extractedTools");
+        if(toolContent && tools && tools.length > 0)
+        {
+          var tool = tools[0];
+          messages.push({role:"tool", name:tool.name, content: toolContent})
+        }
 
-        // 5. Lưu lại lịch sử vào biến để dùng cho lần sau
         bru.setVar("chat_history", messages);
 
-        // 6. Quan trọng: Biến mảng thành chuỗi JSON an toàn để đưa vào Body
-        // Chúng ta sẽ dùng JSON.stringify để nó tự động escape các ký tự \n
         bru.setVar("safe_messages", JSON.stringify(messages));
     - type: after-response
       code: |-

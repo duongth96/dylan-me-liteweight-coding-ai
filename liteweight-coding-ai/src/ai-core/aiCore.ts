@@ -263,7 +263,23 @@ export class AiCore {
             });
             loopCount += 1;
 
-            if (!response.toolCalls || response.toolCalls.length === 0) {
+            const toolCalls = response.toolCalls||[];
+
+            // define tools from message content
+            const jsonPattern = /```json\n([\s\S]*?)\n```/g;
+            let match;
+
+            while ((match = jsonPattern.exec(response.content)) !== null) {
+              try {
+                // match[1] là nội dung text bên trong khối json
+                const jsonObject = JSON.parse(match[1].trim());
+                toolCalls.push(jsonObject);
+              } catch (e) {
+                console.error("Lỗi parse JSON:", e);
+              }
+            }
+
+            if (!toolCalls || toolCalls.length === 0) {
               finalResponse = response.content;
               deps.postMessage({
                 type: "addResponse",
@@ -287,7 +303,7 @@ export class AiCore {
             
             loopMessages.push(response);
 
-            const toolResults = await runToolCalls(response.toolCalls, deps, deps.workspaceRoot);
+            const toolResults = await runToolCalls(toolCalls, deps, deps.workspaceRoot);
             for (const toolResult of toolResults) {
               loopMessages.push({
                 role: "tool",
