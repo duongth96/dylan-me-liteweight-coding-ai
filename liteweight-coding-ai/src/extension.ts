@@ -17,7 +17,7 @@ export function activate(context: vscode.ExtensionContext) {
 	});
 
 	context.subscriptions.push(disposable);
-	// vscode.commands.executeCommand("workbench.action.toggleDevTools");
+	vscode.commands.executeCommand("workbench.action.toggleDevTools");
 }
 
 export function deactivate() {

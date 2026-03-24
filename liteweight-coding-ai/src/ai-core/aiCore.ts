@@ -266,16 +266,34 @@ export class AiCore {
             const toolCalls = response.toolCalls||[];
 
             // define tools from message content
-            const jsonPattern = /```json\n([\s\S]*?)\n```/g;
-            let match;
+            try {
+              const jsonObject = JSON.parse(response.content.trim());
+              toolCalls.push({
+                id: `tool_${Date.now()}`,
+                function: {
+                  index: 0,
+                  name: jsonObject.name,
+                  arguments: jsonObject.arguments,
+                },
+              });
+            } catch (e) {
+              const jsonPattern = /```json\n([\s\S]*?)\n```/g;
+              let match;
 
-            while ((match = jsonPattern.exec(response.content)) !== null) {
-              try {
-                // match[1] là nội dung text bên trong khối json
-                const jsonObject = JSON.parse(match[1].trim());
-                toolCalls.push(jsonObject);
-              } catch (e) {
-                console.error("Lỗi parse JSON:", e);
+              while ((match = jsonPattern.exec(response.content)) !== null) {
+                try {
+                  const jsonObject = JSON.parse(match[1].trim());
+                  toolCalls.push({
+                    id: `tool_${Date.now()}`,
+                    function: {
+                      index: 0,
+                      name: jsonObject.name,
+                      arguments: jsonObject.arguments,
+                    },
+                  });
+                } catch (e) {
+                  console.error("Lỗi parse JSON:", e);
+                }
               }
             }
 
