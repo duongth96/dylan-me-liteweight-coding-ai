@@ -15,43 +15,6 @@ http:
         "stream": false,
         "prompt":"",
         "context": {{priv_context}},
-        "tools": [
-          {
-            "type": "function",
-            "function": {
-              "name": "read_file",
-              "description": "Read the full content of a file",
-              "parameters": {
-                "type": "object",
-                "properties": {
-                  "path": {
-                    "type": "string",
-                    "description": "Relative path to the file"
-                  }
-                },
-                "required": ["path"]
-              }
-            }
-          },
-          {
-            "type": "function",
-            "function": {
-              "name": "search_code",
-              "description": "Search for code snippets or keywords across the project",
-              "parameters": {
-                "type": "object",
-                "properties": {
-                  "query": {
-                    "type": "string",
-                    "description": "Keyword or code pattern to search"
-                  }
-                },
-                "required": ["query"]
-              }
-            }
-          }
-        ],
-        
         "options": {
           "num_keep": 24,
           "seed": 42,
@@ -90,10 +53,32 @@ http:
 runtime:
   variables:
     - name: sysPrompt
-      value: You are a senior software engineer. You can use tools when necessary. Only call tools if needed. When you have enough information, return the final answer.
+      value: ""
     - name: priv_context
       value: "[]"
   scripts:
+    - type: before-request
+      code: |-
+        bru.setVar(
+          "sysPrompt", 
+          `
+          you are coding assistant.
+          you can use tools.
+          tools:
+          - list_files() // list all files path in project folder.
+          - read_file(path:string) // get a file content by file path.
+          you need call tool like.
+          example:
+          \`\`\`tool_calls
+          [
+            {
+              "tool_name":"read_file",
+              "args":["src/file.text"]
+            }
+          ]
+          \`\`\`
+          `
+        );
     - type: after-response
       code: |-
         // 1. Lấy dữ liệu trả về từ API

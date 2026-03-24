@@ -1,6 +1,12 @@
-#!/bin/sh
+#!/bin/bash
+set -e
 
 /init-users.sh
+
+IPEX_INIT_PATH="$(command -v ipex-llm-init 2>/dev/null || true)"
+if [ -n "$IPEX_INIT_PATH" ] && [ -f "$IPEX_INIT_PATH" ]; then
+  source "$IPEX_INIT_PATH" --gpu --device Arc >/dev/null 2>&1 || source "$IPEX_INIT_PATH" --gpu
+fi
 
 # Chạy ollama serve ở background
 ollama serve &

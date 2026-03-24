@@ -1,7 +1,7 @@
 info:
-  name: /api/chat
+  name: /api/chat copy
   type: http
-  seq: 3
+  seq: 4
 
 http:
   method: POST
@@ -12,72 +12,59 @@ http:
       {
         "model": "qwen2.5-coder:3b",
         "stream": false,
-        "messages": [
+        "messages": {{safe_messages}},
+        "tools": [
           {
-            "role": "system",
-            "content": "{{sysPrompt}}"
+            "type": "function",
+            "function": {
+              "name": "list_files",
+              "description": "List all file of relative path",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "path": {
+                    "type": "string",
+                    "description": "Start from path or empty for from root folder"
+                  }
+                }
+              }
+            }
           },
           {
-            "role":"user",
-            "content": "help me fix some bugs in login file"
+            "type": "function",
+            "function": {
+              "name": "read_file",
+              "description": "Read the full content of a file",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "path": {
+                    "type": "string",
+                    "description": "Relative path to the file"
+                  }
+                },
+                "required": ["path"]
+              }
+            }
+          },
+          {
+            "type": "function",
+            "function": {
+              "name": "search_code",
+              "description": "Search for code snippets or keywords across the project",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "query": {
+                    "type": "string",
+                    "description": "Keyword or code pattern to search"
+                  }
+                },
+                "required": ["query"]
+              }
+            }
           }
-          /// next
-
         ],
-      //   "tools": [
-      //     {
-      //       "type": "function",
-      //       "function": {
-      //         "name": "read_file",
-      //         "description": "Read the full content of a file",
-      //         "parameters": {
-      //           "type": "object",
-      //           "properties": {
-      //             "path": {
-      //               "type": "string",
-      //               "description": "Relative path to the file"
-      //             }
-      //           },
-      //           "required": ["path"]
-      //         }
-      //       }
-      //     },
-      //     {
-      //       "type": "function",
-      //       "function": {
-      //         "name": "search_code",
-      //         "description": "Search for code snippets or keywords across the project",
-      //         "parameters": {
-      //           "type": "object",
-      //           "properties": {
-      //             "query": {
-      //               "type": "string",
-      //               "description": "Keyword or code pattern to search"
-      //             }
-      //           },
-      //           "required": ["query"]
-      //         }
-      //       }
-      //     }
-      //     ,
-      //     {
-      //       "type": "function",
-      //       "function": {
-      //         "name": "project_struct",
-      //         "description": "Get project structure from project root folder or at any start path in project",
-      //         "parameters": {
-      //           "type": "object",
-      //           "properties": {
-      //             "path": {
-      //               "type": "string",
-      //               "description": "Start from path or empty for from root folder"
-      //             }
-      //           }
-      //         }
-      //       }
-      //     }
-      //   ],
-        
         "options": {
           "num_keep": 24,
           "seed": 42,
@@ -115,35 +102,79 @@ http:
 
 runtime:
   variables:
-    - name: priv_context
-      value: "[]"
+    - name: user_query
+      value: Hello, list my files
+    - name: tool_result
+      value: ""
   scripts:
     - type: before-request
       code: |-
-        bru.setVar("sysPrompt", `you are coding assistant.
+        //bru.deleteAllVars();
+        // 1. Lấy danh sách messages cũ từ biến môi trường/collection (nếu chưa có thì tạo mảng rỗng)
+        let messages = bru.getVar("chat_history");
+        if (!messages) {
+          messages = [];
+        }
+
+        // 2. Định nghĩa System Prompt (với đầy đủ format tool của bạn)
+        const sysPrompt = `you are coding assistant.
         you can use tools.
-        tools:
-        - list_files() => list all files path in project folder.
-        - read_file(path:string) => get a file content by file path.
         you need call tool like.
         example:
-        \`\`\`tool_calls
-        [{"tool_name":"read_file","args":["src/file.text"]}]
-        \`\`\``);
+        \`\`\`tool
+        [{"name":"read_file","args":["src/file.text"]}]
+        \`\`\``;
+
+        // 3. Nếu là tin nhắn đầu tiên, hãy push System Prompt vào
+        if (messages.length === 0) {
+          messages.push({ role: "system", content: sysPrompt });
+        }
+
+        // 4. Lấy câu hỏi hiện tại từ một biến khác (ví dụ user_input) hoặc nhập cứng
+        let currentUserInput = bru.getVar("user_query");
+        if(currentUserInput)
+          messages.push({ role: "user", content: currentUserInput });
+
+        let toolRs = bru.getVar("tool_result");
+        if(toolRs)
+          messages.push({role:"tool", name:""})
+
+        // 5. Lưu lại lịch sử vào biến để dùng cho lần sau
+        bru.setVar("chat_history", messages);
+
+        // 6. Quan trọng: Biến mảng thành chuỗi JSON an toàn để đưa vào Body
+        // Chúng ta sẽ dùng JSON.stringify để nó tự động escape các ký tự \n
+        bru.setVar("safe_messages", JSON.stringify(messages));
     - type: after-response
       code: |-
-        // 1. Lấy dữ liệu trả về từ API
         const data = res.getBody();
+        const newAssisMessage = data.message;
+        const chatHistory = bru.getVar("chat_history")
 
-        // 2. Trích xuất trường bạn cần (ví dụ trường 'access_token' hoặc 'id')
-        const myValue = data.context; 
+        bru.setVar("chat_history", [...chatHistory, newAssisMessage]);
 
-        // 3. Lưu vào biến Environment hoặc Runtime để dùng cho các request sau
-        // Lưu vào Environment (khuyên dùng nếu cần dùng lâu dài)
-        bru.setVar("priv_context", myValue);
 
-        // Hoặc lưu vào Runtime (biến tạm, mất khi tắt Bruno)
-        // bru.setVar("my_shared_token", myValue);
+        const content = newAssisMessage.content; 
+
+        // Pattern: tìm nội dung giữa ```json và ```
+        const jsonPattern = /```json\n([\s\S]*?)\n```/g;
+
+        let match;
+        const foundJsons = [];
+
+        while ((match = jsonPattern.exec(content)) !== null) {
+          try {
+            // match[1] là nội dung text bên trong khối json
+            const jsonObject = JSON.parse(match[1].trim());
+            foundJsons.push(jsonObject);
+          } catch (e) {
+            console.error("Lỗi parse JSON:", e);
+          }
+        }
+
+        // In ra danh sách các tool call tìm được
+        console.log(foundJsons);
+        bru.setVar("extractedTools", foundJsons);
 
 settings:
   encodeUrl: true
