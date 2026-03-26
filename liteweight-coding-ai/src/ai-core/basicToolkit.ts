@@ -2,47 +2,47 @@ import * as fs from "fs";
 import * as path from "path";
 import { exec } from "child_process";
 
-type StructureOptions = {
+export type StructureOptions = {
   ignoreDirs?: string[];
   includeExtensions?: string[];
 };
 
-type ReadFileOptions = {
+export type ReadFileOptions = {
   maxChars?: number;
   rootPath?: string;
   fromLine?: number;
   startChar?: number;
 };
 
-type WriteFileOptions = {
+export type WriteFileOptions = {
   rootPath?: string;
 };
 
-type SearchOptions = {
+export type SearchOptions = {
   ignoreDirs?: string[];
   includeExtensions?: string[];
   maxResults?: number;
 };
 
-type WebSearchOptions = {
+export type WebSearchOptions = {
   maxResults?: number;
   engines?: string[];
 };
 
-type RunCommandOptions = {
+export type RunCommandOptions = {
   cwd?: string;
   timeoutMs?: number;
   maxBuffer?: number;
 };
 
-type SearchMatch = {
+export type SearchMatch = {
   filePath: string;
   line: number;
   column: number;
   preview: string;
 };
 
-type ToolkitError = {
+export type ToolkitError = {
   error: string;
 };
 

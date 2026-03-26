@@ -5,8 +5,9 @@ import {
   writeFileContent,
   runCommand,
   searchWeb,
-  searchCode,
+  searchCode
 } from "./basicToolkit";
+import type { ToolkitError } from "./basicToolkit";
 
 export type ToolkitExecutorOptions = {
   defaultRootPath?: string;
@@ -43,7 +44,15 @@ export async function executeTool(
     const startChar = typeof args.startChar === "number" ? args.startChar : undefined;
     const rootPath = typeof args.rootPath === "string" ? args.rootPath : defaultRootPath;
     const result = await readFileContent(filePath, { maxChars, rootPath, fromLine, startChar });
-    return JSON.stringify(result);
+
+    if ("error" in result) {
+      return result.error;
+    }
+
+    return `
+      Read file ${filePath} result:
+      ${result.content}
+    `.trim();
   }
 
   if (name === "write_file") {
@@ -56,7 +65,14 @@ export async function executeTool(
     const content = typeof args.content === "string" ? args.content : "";
     const rootPath = typeof args.rootPath === "string" ? args.rootPath : defaultRootPath;
     const result = await writeFileContent(filePath, content, { rootPath });
-    return JSON.stringify(result);
+
+    if ("error" in result) {
+      return result.error;
+    }
+
+    return `
+      Write file "${result.file}" (Bytes written: ${result.bytes}).
+    `.trim();
   }
 
   if (name === "search_code") {
@@ -70,20 +86,39 @@ export async function executeTool(
       includeExtensions: includeExtensions.length > 0 ? includeExtensions : undefined,
       maxResults,
     });
-    return JSON.stringify({ results: matches });
+
+    if ("error" in matches) {
+      return matches.error;
+    }
+
+    return JSON.stringify({ matches });
   }
 
   if (name === "search_web") {
     const keyword = getStringArg(args, ["keyword", "query"]) ?? "";
     const maxResults = typeof args.maxResults === "number" ? args.maxResults : undefined;
     const results = await searchWeb(keyword, { maxResults, engines: options.searchEngines });
+
+    if ("error" in results) {
+      return results.error;
+    }
+
     return JSON.stringify(results);
   }
 
   if (name === "run_command") {
     const command = getStringArg(args, ["command"]) ?? "";
     const result = await runCommand(command, { cwd: defaultRootPath });
-    return JSON.stringify(result);
+
+    if ("error" in result) {
+      return result.error;
+    }
+
+    return `
+      Run command "${result.command}" result (Code: ${result.code}):
+      ${result.stdout}
+      ${result.stderr}
+    `.trim();
   }
 
   throw new Error(`Unknown tool: ${name}`);
