@@ -14,37 +14,192 @@ http:
     type: json
     data: |-
       {
-        "model": "qwen2.5-coder:3b",
+        "model": "gemma3:4b",
         "stream": false,
         "messages": {{safe_messages}},
-        "tools": [{"type":"function","function":{"name":"list_files","description":"Get project structure as a flat list of relative paths","parameters":{"type":"object","properties":{"ignoreDirs":{"type":"array","items":{"type":"string"},"description":"Directories to ignore (EX: node_modules, .git, .vscode, etc...)"},"includeExtensions":{"type":"array","items":{"type":"string"},"description":"File extensions to include (EX: .js, .ts, .jsx, .tsx, etc...)"}}}}},{"type":"function","function":{"name":"read_file","description":"Read file content and return { file, content }","parameters":{"type":"object","properties":{"file":{"type":"string","description":"Relative path from project root"},"maxChars":{"type":"number","description":"Maximum characters to return"},"fromLine":{"type":"number","description":"Start reading from this line number (1-based)"},"startChar":{"type":"number","description":"Start reading from this character position"}},"required":["file"]}}},{"type":"function","function":{"name":"write_file","description":"Write content to a file (overwrite existing content)","parameters":{"type":"object","properties":{"path":{"type":"string","description":"File path to write"},"content":{"type":"string","description":"Full file content"}},"required":["path","content"]}}},{"type":"function","function":{"name":"search_code","description":"Search code by string or regex in all file from project folder","parameters":{"type":"object","properties":{"keyword":{"type":"string","description":"Search string or regex, e.g. /foo.*/i"},"ignoreDirs":{"type":"array","items":{"type":"string"},"description":"Directories to ignore"},"includeExtensions":{"type":"array","items":{"type":"string"},"description":"File extensions to include"},"maxResults":{"type":"number","description":"Maximum matches to return"}},"required":["keyword"]}}},{"type":"function","function":{"name":"search_web","description":"Search the web and return a short list of results","parameters":{"type":"object","properties":{"keyword":{"type":"string","description":"Search keyword"},"maxResults":{"type":"number","description":"Maximum results to return"}},"required":["keyword"]}}},{"type":"function","function":{"name":"run_command","description":"Run a shell command and return output","parameters":{"type":"object","properties":{"command":{"type":"string","description":"Command to run"}},"required":["command"]}}}],
+      //   "tools": [
+      //     {
+      //       "type": "function",
+      //       "function": {
+      //         "name": "list_files",
+      //         "description": "Get project structure as a flat list of relative paths",
+      //         "parameters": {
+      //           "type": "object",
+      //           "properties": {
+      //             "ignoreDirs": {
+      //               "type": "array",
+      //               "items": {
+      //                 "type": "string"
+      //               },
+      //               "description": "Directories to ignore (EX: node_modules, .git, .vscode, etc...)"
+      //             },
+      //             "includeExtensions": {
+      //               "type": "array",
+      //               "items": {
+      //                 "type": "string"
+      //               },
+      //               "description": "File extensions to include (EX: .js, .ts, .jsx, .tsx, etc...)"
+      //             }
+      //           }
+      //         }
+      //       }
+      //     },
+      //     {
+      //       "type": "function",
+      //       "function": {
+      //         "name": "read_file",
+      //         "description": "Read file content and return { file, content }",
+      //         "parameters": {
+      //           "type": "object",
+      //           "properties": {
+      //             "file": {
+      //               "type": "string",
+      //               "description": "Relative path from project root"
+      //             },
+      //             "maxChars": {
+      //               "type": "number",
+      //               "description": "Maximum characters to return"
+      //             },
+      //             "fromLine": {
+      //               "type": "number",
+      //               "description": "Start reading from this line number (1-based)"
+      //             },
+      //             "startChar": {
+      //               "type": "number",
+      //               "description": "Start reading from this character position"
+      //             }
+      //           },
+      //           "required": [
+      //             "file"
+      //           ]
+      //         }
+      //       }
+      //     },
+      //     {
+      //       "type": "function",
+      //       "function": {
+      //         "name": "write_file",
+      //         "description": "Write content to a file (overwrite existing content)",
+      //         "parameters": {
+      //           "type": "object",
+      //           "properties": {
+      //             "path": {
+      //               "type": "string",
+      //               "description": "File path to write"
+      //             },
+      //             "content": {
+      //               "type": "string",
+      //               "description": "Full file content"
+      //             }
+      //           },
+      //           "required": [
+      //             "path",
+      //             "content"
+      //           ]
+      //         }
+      //       }
+      //     },
+      //     {
+      //       "type": "function",
+      //       "function": {
+      //         "name": "search_code",
+      //         "description": "Search code by string or regex in all file from project folder",
+      //         "parameters": {
+      //           "type": "object",
+      //           "properties": {
+      //             "keyword": {
+      //               "type": "string",
+      //               "description": "Search string or regex, e.g. /foo.*/i"
+      //             },
+      //             "ignoreDirs": {
+      //               "type": "array",
+      //               "items": {
+      //                 "type": "string"
+      //               },
+      //               "description": "Directories to ignore"
+      //             },
+      //             "includeExtensions": {
+      //               "type": "array",
+      //               "items": {
+      //                 "type": "string"
+      //               },
+      //               "description": "File extensions to include"
+      //             },
+      //             "maxResults": {
+      //               "type": "number",
+      //               "description": "Maximum matches to return"
+      //             }
+      //           },
+      //           "required": [
+      //             "keyword"
+      //           ]
+      //         }
+      //       }
+      //     },
+      //     {
+      //       "type": "function",
+      //       "function": {
+      //         "name": "search_web",
+      //         "description": "Search the web and return a short list of results",
+      //         "parameters": {
+      //           "type": "object",
+      //           "properties": {
+      //             "keyword": {
+      //               "type": "string",
+      //               "description": "Search keyword"
+      //             },
+      //             "maxResults": {
+      //               "type": "number",
+      //               "description": "Maximum results to return"
+      //             }
+      //           },
+      //           "required": [
+      //             "keyword"
+      //           ]
+      //         }
+      //       }
+      //     },
+      //     {
+      //       "type": "function",
+      //       "function": {
+      //         "name": "run_command",
+      //         "description": "Run a shell command and return output",
+      //         "parameters": {
+      //           "type": "object",
+      //           "properties": {
+      //             "command": {
+      //               "type": "string",
+      //               "description": "Command to run"
+      //             }
+      //           },
+      //           "required": [
+      //             "command"
+      //           ]
+      //         }
+      //       }
+      //     }
+      //   ],
         "options": {
           "num_keep": 24,
           "seed": 42,
-
           "num_predict": 512,
-
           "temperature": 0.2,
           "top_k": 40,
           "top_p": 0.9,
           "min_p": 0.05,
           "typical_p": 1.0,
-
           "repeat_last_n": 64,
           "repeat_penalty": 1.1,
           "presence_penalty": 0.0,
           "frequency_penalty": 0.0,
           "penalize_newline": false,
-
           "stop": [
-              "\n\n\n",
-              "```output",
-              "END"
+            "\n\n\n",
+            "```output",
+            "END"
           ],
-
           "num_ctx": 4096,
           "num_batch": 8,
-
           "num_gpu": 29,
           "main_gpu": 0,
           "use_mmap": true,
@@ -57,23 +212,38 @@ runtime:
   variables:
     - name: clear_vars
       value: "true"
+      disabled: true
     - name: user_query
       value: I have error when npm start my project, need you fix it
+      disabled: true
     - name: tool_result
       value: '{"results":["package-lock.json","src\server.js","package.json"]}'
+      disabled: true
   scripts:
     - type: before-request
       code: |-
         bru.deleteAllVars();
 
-        const sysPrompt = `you are coding assistant.
-        you can use tools. tool allays return JSON structure.
-        you need call tool like.
-        example:
-        \`\`\`tool
-        [{"name":"read_file","args":["src/file.text"]}]
-        \`\`\``;
+        // # 1. prompt of system
+        const sysPrompt = `you are coding assistant and you in a root project folder.
+        you can use tools.
+        All tools:
+        - list_files(includeExtensions:string[], ignoreExtrensions:string[]) // list all file from root project.
+        - read_file(path:string, fromLine:number, toLine?:number, length?:number) // read all content file by relative path.
+        - search_code(query:string, resultCount:number) // search code in all file of project.
+        - run_command(command:string) // run a command with terminal or cmd.
+        - browser(search:string) // search with keyword or enter url to search from internet.
 
+        Example:
+        User: need summary project.
+        Assistant: {"tool":"list_files",aggruments:{includeExtensions[...],ignoreExtrensions:[...]}}.
+        `;
+
+        // # 2. prompt of user
+        const userPrompt = `tôi muốn bạn mô tả về dự án`;
+
+        // # 3. executed tool result
+        const toolResult = ``;
           
         // 1. Lấy danh sách messages cũ từ biến môi trường/collection (nếu chưa có thì tạo mảng rỗng)
         let messages = bru.getVar("chat_history");
@@ -82,16 +252,16 @@ runtime:
         }
 
         if (messages.length === 0) {
-          messages.push({ role: "system", content: sysPrompt });
+          messages.push({ role: "system", content: sysPrompt.trim() });
         }
 
-        let currentUserInput = bru.getEnvVar("user_query"); 
+        let currentUserInput = userPrompt; 
         console.log(currentUserInput);
         if(currentUserInput)
           messages.push({ role: "user", content: currentUserInput });
 
-        let toolContent = bru.getVar("tool_result");
-        let tools = bru.getVar("extractedTools");
+        let toolContent = toolResult;
+        let tools = bru.getVar("extracted_tools");
         if(toolContent && tools && tools.length > 0)
         {
           var tool = tools[0];
@@ -130,7 +300,7 @@ runtime:
 
         // In ra danh sách các tool call tìm được
         console.log(foundJsons);
-        bru.setVar("extractedTools", foundJsons);
+        bru.setVar("extracted_tools", foundJsons);
 
 settings:
   encodeUrl: true
